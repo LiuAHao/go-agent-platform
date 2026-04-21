@@ -67,6 +67,8 @@ export type ModelItem = {
   workspace_id: string
   name: string
   provider: string
+  api_base_url: string
+  api_key: string
   model_key: string
   description: string
   context_window: number
@@ -154,6 +156,8 @@ export type CreateSkillPayload = {
 export type CreateModelPayload = {
   name: string
   provider: string
+  api_base_url: string
+  api_key: string
   model_key: string
   description: string
   context_window: number

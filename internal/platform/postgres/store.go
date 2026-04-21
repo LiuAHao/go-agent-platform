@@ -12,10 +12,10 @@ import (
 
 	"go-agent-platform/internal/config"
 	"go-agent-platform/internal/domain/agent"
-	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/approval"
 	"go-agent-platform/internal/domain/audit"
 	"go-agent-platform/internal/domain/auth"
+	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/session"
 	"go-agent-platform/internal/domain/shared"
 	"go-agent-platform/internal/domain/skill"
@@ -46,6 +46,7 @@ func New(cfg config.Config) (*Store, error) {
 			resolveMigrationPath("migrations/001_init.sql"),
 			resolveMigrationPath("migrations/002_skill_and_model_registry.sql"),
 			resolveMigrationPath("migrations/003_platform_catalog_and_chat.sql"),
+			resolveMigrationPath("migrations/004_model_api_config.sql"),
 		); err != nil {
 			pool.Close()
 			return nil, err
@@ -136,6 +137,8 @@ func (s *Store) EnsureSeedData(cfg config.Config) error {
 		WorkspaceID:     ws.ID,
 		Name:            "Mock Provider",
 		Provider:        "mock",
+		APIBaseURL:      "",
+		APIKey:          "",
 		ModelKey:        "mock-1",
 		Description:     "默认开发模型，用于本地调试和首轮联调。",
 		ContextWindow:   8192,
@@ -180,13 +183,15 @@ func (s *Store) EnsureSeedData(cfg config.Config) error {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into models (id, workspace_id, name, provider, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		insert into models (id, workspace_id, name, provider, api_base_url, api_key, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 	`,
 		defaultModel.ID,
 		defaultModel.WorkspaceID,
 		defaultModel.Name,
 		defaultModel.Provider,
+		defaultModel.APIBaseURL,
+		defaultModel.APIKey,
 		defaultModel.ModelKey,
 		defaultModel.Description,
 		defaultModel.ContextWindow,
@@ -717,9 +722,9 @@ func (s *Store) SaveModel(item model.Model) error {
 		return err
 	}
 	_, err = s.pool.Exec(context.Background(), `
-		insert into models (id, workspace_id, name, provider, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-	`, item.ID, item.WorkspaceID, item.Name, item.Provider, item.ModelKey, item.Description, item.ContextWindow, item.MaxOutputTokens, capabilities, item.Enabled, item.IsDefault, item.CreatedBy, item.CreatedAt, item.UpdatedAt)
+		insert into models (id, workspace_id, name, provider, api_base_url, api_key, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+	`, item.ID, item.WorkspaceID, item.Name, item.Provider, item.APIBaseURL, item.APIKey, item.ModelKey, item.Description, item.ContextWindow, item.MaxOutputTokens, capabilities, item.Enabled, item.IsDefault, item.CreatedBy, item.CreatedAt, item.UpdatedAt)
 	return err
 }
 
@@ -730,9 +735,9 @@ func (s *Store) UpdateModel(item model.Model) error {
 	}
 	_, err = s.pool.Exec(context.Background(), `
 		update models
-		set name = $2, provider = $3, model_key = $4, description = $5, context_window = $6, max_output_tokens = $7, capabilities = $8, enabled = $9, is_default = $10, updated_at = $11
+		set name = $2, provider = $3, api_base_url = $4, api_key = $5, model_key = $6, description = $7, context_window = $8, max_output_tokens = $9, capabilities = $10, enabled = $11, is_default = $12, updated_at = $13
 		where id = $1
-	`, item.ID, item.Name, item.Provider, item.ModelKey, item.Description, item.ContextWindow, item.MaxOutputTokens, capabilities, item.Enabled, item.IsDefault, item.UpdatedAt)
+	`, item.ID, item.Name, item.Provider, item.APIBaseURL, item.APIKey, item.ModelKey, item.Description, item.ContextWindow, item.MaxOutputTokens, capabilities, item.Enabled, item.IsDefault, item.UpdatedAt)
 	return err
 }
 
@@ -751,7 +756,7 @@ func (s *Store) DeleteModel(workspaceID, modelID string) error {
 
 func (s *Store) FindModelByID(modelID string) (model.Model, error) {
 	row := s.pool.QueryRow(context.Background(), `
-		select id, workspace_id, name, provider, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at
+		select id, workspace_id, name, provider, api_base_url, api_key, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at
 		from models where id = $1
 	`, modelID)
 	return scanModel(row)
@@ -759,7 +764,7 @@ func (s *Store) FindModelByID(modelID string) (model.Model, error) {
 
 func (s *Store) FindModelByKey(workspaceID, modelKey string) (model.Model, error) {
 	row := s.pool.QueryRow(context.Background(), `
-		select id, workspace_id, name, provider, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at
+		select id, workspace_id, name, provider, api_base_url, api_key, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at
 		from models where workspace_id = $1 and model_key = $2
 	`, workspaceID, modelKey)
 	return scanModel(row)
@@ -767,7 +772,7 @@ func (s *Store) FindModelByKey(workspaceID, modelKey string) (model.Model, error
 
 func (s *Store) ListModels(workspaceID string) ([]model.Model, error) {
 	rows, err := s.pool.Query(context.Background(), `
-		select id, workspace_id, name, provider, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at
+		select id, workspace_id, name, provider, api_base_url, api_key, model_key, description, context_window, max_output_tokens, capabilities, enabled, is_default, created_by, created_at, updated_at
 		from models where workspace_id = $1
 		order by is_default desc, created_at asc
 	`, workspaceID)
@@ -1226,7 +1231,7 @@ func scanModel(scanner interface {
 }) (model.Model, error) {
 	var item model.Model
 	var capabilitiesRaw []byte
-	if err := scanner.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.Provider, &item.ModelKey, &item.Description, &item.ContextWindow, &item.MaxOutputTokens, &capabilitiesRaw, &item.Enabled, &item.IsDefault, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	if err := scanner.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.Provider, &item.APIBaseURL, &item.APIKey, &item.ModelKey, &item.Description, &item.ContextWindow, &item.MaxOutputTokens, &capabilitiesRaw, &item.Enabled, &item.IsDefault, &item.CreatedBy, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.Model{}, errors.New("model not found")
 		}

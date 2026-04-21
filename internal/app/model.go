@@ -13,6 +13,8 @@ type CreateModelRequest struct {
 	WorkspaceID     string   `json:"workspace_id"`
 	Name            string   `json:"name"`
 	Provider        string   `json:"provider"`
+	APIBaseURL      string   `json:"api_base_url"`
+	APIKey          string   `json:"api_key"`
 	ModelKey        string   `json:"model_key"`
 	Description     string   `json:"description"`
 	ContextWindow   int      `json:"context_window"`
@@ -25,6 +27,8 @@ type CreateModelRequest struct {
 type UpdateModelRequest struct {
 	Name            string   `json:"name"`
 	Provider        string   `json:"provider"`
+	APIBaseURL      string   `json:"api_base_url"`
+	APIKey          string   `json:"api_key"`
 	ModelKey        string   `json:"model_key"`
 	Description     string   `json:"description"`
 	ContextWindow   int      `json:"context_window"`
@@ -58,6 +62,8 @@ func (a *Application) CreateModel(userID string, req CreateModelRequest) (model.
 		WorkspaceID:     workspaceID,
 		Name:            name,
 		Provider:        strings.TrimSpace(req.Provider),
+		APIBaseURL:      strings.TrimSpace(req.APIBaseURL),
+		APIKey:          strings.TrimSpace(req.APIKey),
 		ModelKey:        modelKey,
 		Description:     strings.TrimSpace(req.Description),
 		ContextWindow:   req.ContextWindow,
@@ -99,6 +105,12 @@ func (a *Application) UpdateModel(userID, modelID string, req UpdateModelRequest
 	}
 	if value := strings.TrimSpace(req.Provider); value != "" {
 		item.Provider = value
+	}
+	if value := strings.TrimSpace(req.APIBaseURL); value != "" {
+		item.APIBaseURL = value
+	}
+	if value := strings.TrimSpace(req.APIKey); value != "" {
+		item.APIKey = value
 	}
 	if value := strings.TrimSpace(req.ModelKey); value != "" {
 		if value != item.ModelKey {

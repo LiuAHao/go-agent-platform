@@ -8,10 +8,10 @@ import (
 
 	"go-agent-platform/internal/config"
 	"go-agent-platform/internal/domain/agent"
-	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/approval"
 	"go-agent-platform/internal/domain/audit"
 	"go-agent-platform/internal/domain/auth"
+	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/session"
 	"go-agent-platform/internal/domain/shared"
 	"go-agent-platform/internal/domain/skill"
@@ -23,48 +23,48 @@ import (
 type Store struct {
 	mu sync.RWMutex
 
-	users         map[string]auth.User
-	usersByEmail  map[string]string
-	tokens        map[string]auth.SessionToken
-	workspaces    map[string]workspace.Workspace
-	memberships   map[string]workspace.Membership
-	agents        map[string]agent.Agent
-	agentVersions map[string]agent.Version
-	tools         map[string]tool.Tool
-	skills        map[string]skill.Skill
-	models        map[string]model.Model
+	users           map[string]auth.User
+	usersByEmail    map[string]string
+	tokens          map[string]auth.SessionToken
+	workspaces      map[string]workspace.Workspace
+	memberships     map[string]workspace.Membership
+	agents          map[string]agent.Agent
+	agentVersions   map[string]agent.Version
+	tools           map[string]tool.Tool
+	skills          map[string]skill.Skill
+	models          map[string]model.Model
 	installedTools  map[string]map[string]struct{}
 	installedSkills map[string]map[string]struct{}
-	sessions      map[string]session.Session
-	messages      map[string][]session.Message
-	tasks         map[string]task.Task
-	taskSteps     map[string][]task.Step
-	approvals     map[string]approval.Approval
-	auditEvents   []audit.Event
-	schedules     map[string]task.Schedule
+	sessions        map[string]session.Session
+	messages        map[string][]session.Message
+	tasks           map[string]task.Task
+	taskSteps       map[string][]task.Step
+	approvals       map[string]approval.Approval
+	auditEvents     []audit.Event
+	schedules       map[string]task.Schedule
 }
 
 func NewStore() *Store {
 	return &Store{
-		users:         make(map[string]auth.User),
-		usersByEmail:  make(map[string]string),
-		tokens:        make(map[string]auth.SessionToken),
-		workspaces:    make(map[string]workspace.Workspace),
-		memberships:   make(map[string]workspace.Membership),
-		agents:        make(map[string]agent.Agent),
-		agentVersions: make(map[string]agent.Version),
-		tools:         make(map[string]tool.Tool),
-		skills:        make(map[string]skill.Skill),
-		models:        make(map[string]model.Model),
+		users:           make(map[string]auth.User),
+		usersByEmail:    make(map[string]string),
+		tokens:          make(map[string]auth.SessionToken),
+		workspaces:      make(map[string]workspace.Workspace),
+		memberships:     make(map[string]workspace.Membership),
+		agents:          make(map[string]agent.Agent),
+		agentVersions:   make(map[string]agent.Version),
+		tools:           make(map[string]tool.Tool),
+		skills:          make(map[string]skill.Skill),
+		models:          make(map[string]model.Model),
 		installedTools:  make(map[string]map[string]struct{}),
 		installedSkills: make(map[string]map[string]struct{}),
-		sessions:      make(map[string]session.Session),
-		messages:      make(map[string][]session.Message),
-		tasks:         make(map[string]task.Task),
-		taskSteps:     make(map[string][]task.Step),
-		approvals:     make(map[string]approval.Approval),
-		auditEvents:   make([]audit.Event, 0),
-		schedules:     make(map[string]task.Schedule),
+		sessions:        make(map[string]session.Session),
+		messages:        make(map[string][]session.Message),
+		tasks:           make(map[string]task.Task),
+		taskSteps:       make(map[string][]task.Step),
+		approvals:       make(map[string]approval.Approval),
+		auditEvents:     make([]audit.Event, 0),
+		schedules:       make(map[string]task.Schedule),
 	}
 }
 
@@ -108,6 +108,8 @@ func (s *Store) EnsureSeedData(cfg config.Config) error {
 		WorkspaceID:     ws.ID,
 		Name:            "Mock Provider",
 		Provider:        "mock",
+		APIBaseURL:      "",
+		APIKey:          "",
 		ModelKey:        "mock-1",
 		Description:     "默认开发模型，用于本地调试和首轮联调。",
 		ContextWindow:   8192,
@@ -151,6 +153,8 @@ func (s *Store) ensureDefaultModelLocked(userID string) {
 		WorkspaceID:     workspaceID,
 		Name:            "Mock Provider",
 		Provider:        "mock",
+		APIBaseURL:      "",
+		APIKey:          "",
 		ModelKey:        "mock-1",
 		Description:     "默认开发模型，用于本地调试和首轮联调。",
 		ContextWindow:   8192,
