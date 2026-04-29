@@ -603,8 +603,40 @@ svg {
   box-shadow: inset 0 0 0 1px rgba(25, 37, 31, 0.06);
 }
 
-.upload-card input[type="file"] {
-  max-width: 100%;
+.upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.upload-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  width: fit-content;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(25, 37, 31, 0.08);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.upload-trigger:hover {
+  transform: translateY(-1px);
+  background: #ffffff;
+  box-shadow: var(--shadow-md);
+}
+
+.upload-filename {
+  color: var(--text-soft);
+  font-size: 14px;
 }
 
 .upload-card strong {

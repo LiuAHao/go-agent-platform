@@ -1,0 +1,14 @@
+{
+  "name": "go-agent-platform-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Go Agent Platform 桌面客户端壳层",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^31.7.7"
+  }
+}

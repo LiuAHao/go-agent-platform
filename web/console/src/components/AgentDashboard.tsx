@@ -391,11 +391,17 @@ function SkillsPage(props: DashboardProps) {
                       <span>上传 Skill 文件夹</span>
                       <div className="upload-card">
                         <input
+                          className="upload-input"
+                          id="skill-folder-upload"
                           {...({ webkitdirectory: 'true', directory: 'true' } as Record<string, string>)}
                           multiple
                           onChange={(e) => handleFolderChange(e.target.files)}
                           type="file"
                         />
+                        <label className="upload-trigger" htmlFor="skill-folder-upload">
+                          选择文件夹
+                        </label>
+                        <div className="upload-filename">{folderLabel || '暂未选择文件夹'}</div>
                         <strong>{folderLabel || '选择本地 Skill 文件夹'}</strong>
                         <small>{folderFiles.length > 0 ? `已读取 ${folderFiles.length} 个文件，创建后可在列表中下载草稿。` : '建议包含 SKILL.md、README.md 等文件。'}</small>
                       </div>

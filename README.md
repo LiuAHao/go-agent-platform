@@ -1,93 +1,151 @@
 # Go Agent Platform
 
-一个面向公共场景的多 Agent 平台。
+Go Agent Platform 是一个本地优先的 Agent Studio，目标是让普通用户也能通过简单配置创建、装配和使用自己的 Agent。
 
-当前版本的核心方向是：
+平台采用“云端提供资源、本地完成执行”的产品思路：云端统一分发 Skill、MCP 和 Agent 模板，桌面客户端负责本地 Agent 创建、模型配置、能力装配和对话执行。
 
-- 平台统一提供 `Skill` 和 `MCP`
-- 用户可以安装平台资源到“我的 Skill / 我的 MCP”
-- 用户也可以创建自己的私有 `Skill / MCP`
-- 每个 Agent 在创建或管理时，只绑定用户当前可用的资源
-- Agent 进入独立聊天页，在对话时按绑定配置调用模型、Skill 和 MCP
+## 核心特点
 
-后端目前提供 `memory` 与 `postgres` 两种存储实现，前端控制台使用 React + Vite。
+- **本地优先执行**
+  Agent 的运行、模型配置、文件访问、MCP 调用和 Skill 管理优先在本地客户端完成，减少对全云端运行环境的依赖。
 
-## 当前能力
+- **统一资源供给**
+  平台提供统一的 Skill / MCP 资源目录，用户可以安装到“我的资源”，再装配给不同 Agent 使用。
 
-已完成：
+- **低门槛 Agent 创建**
+  新建 Agent 只需要填写名称、说明、模型和所需能力。复杂参数被收纳到高级设置中，避免一开始暴露过多技术细节。
 
+- **桌面端优先**
+  当前已经接入 Electron 基础桌面壳层，可以加载现有 React 控制台，为后续本地文件、系统能力和本地运行时桥接做准备。
+
+- **前后端分离**
+  后端使用 Go 实现 API、领域模型和存储层，前端使用 React + Vite 构建控制台界面。
+
+## 当前功能
+
+- 平台首页、登录页、注册页
 - 用户登录与鉴权
-- Agent 创建、版本发布、任务执行、审批流
-- 平台 Skill 目录 / 用户私有 Skill / 安装关系
-- 平台 MCP 目录 / 用户私有 MCP / 安装关系
-- 模型注册表
-- Agent 会话与消息读取
-- React 控制台：新建 Agent、Skill/MCP 管理、模型管理、Agent 聊天页
+- Agent 创建与列表管理
+- Agent 独立聊天页面
+- Skill 管理：平台 Skill、我的 Skill、本地上传文件夹入口
+- MCP 管理：平台 MCP、我的 MCP、绑定 JSON 配置
+- 模型配置：模型名称、官方模型名、API URL、API Key
+- Electron 基础桌面客户端
+- `memory` 与 `postgres` 两种存储实现
 
-当前仍在演进：
+## 技术栈
 
-- 更细粒度的权限与多租户能力
-- 更完整的模型管理策略
-- 更丰富的对话态能力，例如历史会话筛选、会话重命名
-- 生产级缓存、限流、任务队列与观测能力
+- 后端：Go
+- 前端：React + Vite + TypeScript
+- 桌面端：Electron
+- 数据库：Memory / PostgreSQL
+- 脚本：PowerShell
 
-## 目录结构
+## 项目结构
 
 ```text
 go-agent-platform/
-├─ cmd/                      # API / Worker 入口
-├─ internal/
-│  ├─ app/                   # 应用层
-│  ├─ config/                # 配置
-│  ├─ domain/                # 领域模型
-│  ├─ platform/
-│  │  ├─ events/             # 事件总线
-│  │  ├─ llm/                # LLM 抽象与 mock
-│  │  ├─ memory/             # 内存存储
-│  │  └─ postgres/           # PostgreSQL 存储
-│  └─ transport/             # HTTP / WebSocket
-├─ migrations/               # 数据库迁移
-├─ scripts/                  # 启动、测试、构建脚本
-├─ tests/                    # 集成测试
-└─ web/console/              # 前端控制台
+├─ cmd/                    # Go 进程入口
+├─ desktop/                # Electron 桌面客户端壳层
+├─ docs/                   # 文档、ADR、实施计划
+├─ internal/               # Go 应用层、领域层、基础设施
+├─ migrations/             # 数据库迁移
+├─ scripts/                # 启动、测试、构建脚本
+├─ tests/                  # 测试
+└─ web/console/            # React + Vite 控制台
 ```
 
-## Quick Start
+## 快速启动
 
-### 1. 启动后端
+### 1. 安装前端依赖
 
-默认使用内存存储：
+```powershell
+cd .\web\console
+npm install
+```
+
+### 2. 安装桌面端依赖
+
+```powershell
+cd .\desktop
+$env:npm_config_cache = "..\.npm-cache"
+npm install
+```
+
+如果 Electron 启动时报 `Electron failed to install correctly`，在 `desktop` 目录执行：
+
+```powershell
+$env:npm_config_cache = "..\.npm-cache"
+npm rebuild electron
+```
+
+### 3. 启动后端
+
+在项目根目录执行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
-后端默认地址：
+默认 API 地址：
 
-- API: `http://localhost:8081`
+```text
+http://localhost:8081
+```
 
 默认管理员账号：
 
-- 邮箱：`admin@example.com`
-- 密码：`ChangeMe123!`
+```text
+admin@example.com
+ChangeMe123!
+```
 
-### 2. 启动前端
-
-进入前端目录并启动开发服务器：
+### 4. 启动 Web 控制台
 
 ```powershell
 cd .\web\console
-npm install
 npm run dev
 ```
 
-前端默认地址：
+默认访问地址：
 
-- Console: `http://localhost:5173`
+```text
+http://localhost:5173
+```
 
-### 3. 使用 PostgreSQL 运行
+### 5. 启动桌面客户端
 
-如果你想使用 PostgreSQL：
+确认后端已启动后，在项目根目录执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-desktop.ps1
+```
+
+该脚本会启动 Vite 开发服务并打开 Electron 桌面窗口。
+
+## 构建与测试
+
+### 前端构建
+
+```powershell
+cd .\web\console
+npm run build
+```
+
+### Electron 脚本检查
+
+```powershell
+node -c .\desktop\main.js
+node -c .\desktop\preload.js
+```
+
+### 后端测试
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+```
+
+### PostgreSQL 模式
 
 ```powershell
 $env:STORAGE_DRIVER = "postgres"
@@ -96,75 +154,14 @@ $env:POSTGRES_AUTO_MIGRATE = "true"
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 ```
 
-### 4. 运行测试
+## 文档
 
-单元与集成测试：
+- [设计方案.md](设计方案.md)：产品定位、架构方向和实施路线
+- [docs/README.md](docs/README.md)：文档目录说明
+- [docs/plans/2026-04-24-mvp-implementation.md](docs/plans/2026-04-24-mvp-implementation.md)：MVP 实施计划
+- [desktop/README.md](desktop/README.md)：桌面端模块说明
+- [web/console/src/components/README.md](web/console/src/components/README.md)：前端组件说明
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
-```
+## 当前状态
 
-仅 PostgreSQL 集成测试：
-
-```powershell
-$env:POSTGRES_DSN = "postgres://agent:agent@127.0.0.1:5432/agent_platform?sslmode=disable"
-powershell -ExecutionPolicy Bypass -File .\scripts\test-postgres.ps1
-```
-
-## 前后端运行关系
-
-建议本地开发时同时启动两个进程：
-
-1. 在项目根目录运行后端 `scripts/dev.ps1`
-2. 在 `web/console` 目录运行 `npm run dev`
-
-前端会调用：
-
-- `http://localhost:8081/api/v1`
-
-如果你调整了后端监听地址，需要同步修改前端 [api.ts](C:\Users\26594\Desktop\项目文件\go-agent-platform\web\console\src\api.ts) 中的 `API_BASE`。
-
-## 配置项
-
-常用环境变量：
-
-- `HTTP_ADDR`
-- `STORAGE_DRIVER`
-- `POSTGRES_DSN`
-- `POSTGRES_AUTO_MIGRATE`
-- `JWT_SECRET`
-- `SEED_ADMIN_EMAIL`
-- `SEED_ADMIN_PASSWORD`
-- `WORKER_POLL_INTERVAL`
-
-参考文件：
-
-- [.env.example](C:\Users\26594\Desktop\项目文件\go-agent-platform\.env.example)
-
-## 关键模块说明
-
-可先阅读这些 README：
-
-- [web/console/src/components/README.md](C:\Users\26594\Desktop\项目文件\go-agent-platform\web\console\src\components\README.md)
-- [internal/domain/skill/README.md](C:\Users\26594\Desktop\项目文件\go-agent-platform\internal\domain\skill\README.md)
-- [internal/domain/tool/README.md](C:\Users\26594\Desktop\项目文件\go-agent-platform\internal\domain\tool\README.md)
-- [internal/domain/model/README.md](C:\Users\26594\Desktop\项目文件\go-agent-platform\internal\domain\model\README.md)
-- [migrations/README.md](C:\Users\26594\Desktop\项目文件\go-agent-platform\migrations\README.md)
-
-## 当前实现边界
-
-为了兼容现有后端链路，`workspace` 仍然保留在内部存储与部分服务逻辑中，但已经不再作为前端产品概念暴露。
-
-当前产品视角更接近：
-
-- 平台资源目录
-- 用户个人资源与安装列表
-- Agent 资源绑定
-- Agent 聊天与执行
-
-后续如果要继续推进大规模公共平台能力，建议优先补：
-
-1. 用户级权限与资源配额
-2. 平台资源审核与发布流程
-3. 模型注册表的多层级管理能力
-4. 会话检索、归档与审计能力
+当前项目处于 MVP 前期阶段，已经完成 Web 控制台和 Electron 桌面壳层的基础框架。下一步重点是补齐本地运行时边界、本地 Skill/MCP 安装链路，以及模型和 MCP 的连通性测试。
