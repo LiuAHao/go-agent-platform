@@ -7,8 +7,16 @@ import {
   installTool,
   uninstallSkill,
   uninstallTool,
+  deleteSession,
+  fetchStorageStats,
+  fetchBackupSettings,
+  updateBackupSettings,
+  triggerBackup,
+  executeCleanup,
   type AgentItem,
+  type BackupSettings,
   type CatalogResponse,
+  type CleanupResult,
   type CreateAgentPayload,
   type CreateModelPayload,
   type CreateSkillPayload,
@@ -17,6 +25,7 @@ import {
   type ModelItem,
   type SessionItem,
   type SkillItem,
+  type StorageStats,
   type ToolItem,
   type UserInfo,
 } from '../api'
@@ -34,6 +43,7 @@ type DashboardProps = {
   onCreateModel: (payload: CreateModelPayload) => Promise<void>
   onCreateSkill: (payload: CreateSkillPayload) => Promise<void>
   onCreateTool: (payload: CreateToolPayload) => Promise<void>
+  onDeleteSession?: (sessionID: string) => Promise<void>
   onRefresh: () => Promise<void>
   skillCatalog: CatalogResponse<SkillItem>
   token: string
@@ -50,7 +60,7 @@ export function AgentDashboard(props: DashboardProps) {
     case 'models':
       return <ModelsPage {...props} />
     case 'settings':
-      return <SettingsPage user={props.user} />
+      return <SettingsPage user={props.user} token={props.token} />
     case 'agent-chat':
       return <AgentChatPage {...props} />
     default:
@@ -758,10 +768,97 @@ function ModelsPage(props: DashboardProps) {
   )
 }
 
-function SettingsPage({ user }: { user: UserInfo | null }) {
+function SettingsPage({ user, token }: { user: UserInfo | null; token: string }) {
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(null)
+  const [backupSettings, setBackupSettings] = useState<BackupSettings | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [cleaning, setCleaning] = useState(false)
+  const [backing, setBacking] = useState(false)
+
+  useEffect(() => {
+    loadData()
+  }, [token])
+
+  async function loadData() {
+    setLoading(true)
+    try {
+      const [stats, backup] = await Promise.all([
+        fetchStorageStats(token),
+        fetchBackupSettings(token),
+      ])
+      setStorageStats(stats)
+      setBackupSettings(backup)
+    } catch (error) {
+      console.error('Failed to load settings:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCleanup() {
+    if (!confirm('确定要清理过期数据吗？此操作不可撤销。')) return
+    
+    setCleaning(true)
+    setMessage('')
+    try {
+      const result = await executeCleanup(token)
+      setMessage(`清理完成：删除 ${result.deleted_sessions} 个会话，${result.deleted_messages} 条消息，释放 ${(result.freed_bytes / 1024 / 1024).toFixed(2)} MB`)
+      await loadData()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '清理失败')
+    } finally {
+      setCleaning(false)
+    }
+  }
+
+  async function handleBackupToggle(enabled: boolean) {
+    if (!backupSettings) return
+    
+    try {
+      await updateBackupSettings(token, { enabled })
+      setBackupSettings({ ...backupSettings, enabled })
+      setMessage(enabled ? '云端备份已开启' : '云端备份已关闭')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '更新备份设置失败')
+    }
+  }
+
+  async function handleBackupFrequencyChange(frequency: BackupSettings['frequency']) {
+    if (!backupSettings) return
+    
+    try {
+      await updateBackupSettings(token, { frequency })
+      setBackupSettings({ ...backupSettings, frequency })
+      setMessage('备份频率已更新')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '更新备份设置失败')
+    }
+  }
+
+  async function handleTriggerBackup() {
+    setBacking(true)
+    setMessage('')
+    try {
+      await triggerBackup(token)
+      setMessage('备份已触发')
+      await loadData()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '触发备份失败')
+    } finally {
+      setBacking(false)
+    }
+  }
+
+  const frequencyLabels: Record<BackupSettings['frequency'], string> = {
+    realtime: '实时',
+    daily: '每日',
+    manual: '手动',
+  }
+
   return (
     <div className="page-shell">
-      <PageHero icon="settings" title="系统设置" subtitle="这里只保留当前平台已有的真实账户信息，不引入额外配置概念。" />
+      <PageHero icon="settings" title="系统设置" subtitle="管理账户信息、本地存储和云端备份。" />
       <div className="editor-panel">
         <Section title="当前账户" hint="登录信息来自 /api/v1/me。">
           <div className="form-grid form-grid-three">
@@ -779,13 +876,115 @@ function SettingsPage({ user }: { user: UserInfo | null }) {
             </div>
           </div>
         </Section>
+
+        <Section title="本地存储" hint="查看本地数据占用情况，清理不需要的数据。">
+          {loading ? (
+            <div className="loading-indicator">正在加载存储信息...</div>
+          ) : storageStats ? (
+            <>
+              <div className="storage-stats-grid">
+                <div className="storage-stat-item">
+                  <span className="stat-label">聊天记录</span>
+                  <span className="stat-value">{storageStats.chat_size_mb} MB</span>
+                  <span className="stat-count">{storageStats.chat_messages} 条消息</span>
+                </div>
+                <div className="storage-stat-item">
+                  <span className="stat-label">Skill 文件</span>
+                  <span className="stat-value">{storageStats.skills_size_mb} MB</span>
+                  <span className="stat-count">{storageStats.skills_count} 个</span>
+                </div>
+                <div className="storage-stat-item">
+                  <span className="stat-label">缓存文件</span>
+                  <span className="stat-value">{storageStats.cache_size_mb} MB</span>
+                </div>
+                <div className="storage-stat-item">
+                  <span className="stat-label">数据库</span>
+                  <span className="stat-value">{storageStats.database_size_mb} MB</span>
+                </div>
+              </div>
+              <div className="storage-total">
+                <strong>总计占用：{storageStats.total_size_mb} MB</strong>
+              </div>
+              <div className="panel-actions">
+                <button className="secondary-button" disabled={cleaning} onClick={handleCleanup} type="button">
+                  {cleaning ? '清理中...' : '清理过期数据'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="empty-panel">
+              <strong>无法加载存储信息</strong>
+            </div>
+          )}
+        </Section>
+
+        <Section title="云端备份" hint="将聊天记录备份到云端，方便跨设备同步。">
+          {backupSettings ? (
+            <>
+              <div className="form-grid form-grid-two">
+                <label className="toggle-field">
+                  <span>开启云端备份</span>
+                  <div className="toggle-inline">
+                    <input
+                      checked={backupSettings.enabled}
+                      onChange={(e) => handleBackupToggle(e.target.checked)}
+                      type="checkbox"
+                    />
+                    <strong>{backupSettings.enabled ? '已开启' : '已关闭'}</strong>
+                  </div>
+                </label>
+
+                {backupSettings.enabled ? (
+                  <label className="field">
+                    <span>备份频率</span>
+                    <select
+                      value={backupSettings.frequency}
+                      onChange={(e) => handleBackupFrequencyChange(e.target.value as BackupSettings['frequency'])}
+                    >
+                      <option value="realtime">实时</option>
+                      <option value="daily">每日</option>
+                      <option value="manual">手动</option>
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+
+              {backupSettings.enabled ? (
+                <div className="backup-info">
+                  <div className="backup-status">
+                    <span className="stat-label">上次备份</span>
+                    <span className="stat-value">
+                      {backupSettings.last_backup_at
+                        ? new Date(backupSettings.last_backup_at).toLocaleString()
+                        : '从未备份'}
+                    </span>
+                  </div>
+                  <div className="panel-actions">
+                    <button className="secondary-button" disabled={backing} onClick={handleTriggerBackup} type="button">
+                      {backing ? '备份中...' : '立即备份'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="backup-note">
+                <p>开启云端备份后，聊天记录将加密存储到云端。换设备登录时可以恢复备份。</p>
+                <p>API Key 等敏感信息永远不会上传到云端。</p>
+              </div>
+            </>
+          ) : (
+            <div className="loading-indicator">正在加载备份设置...</div>
+          )}
+        </Section>
+
+        {message ? <div className={`notice ${message.includes('失败') || message.includes('错误') ? 'error' : 'success'}`}>{message}</div> : null}
       </div>
     </div>
   )
 }
 
 function AgentChatPage(props: DashboardProps) {
-  const { activeAgent, error, models, token } = props
+  const { activeAgent, error, models, token, onDeleteSession } = props
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [activeSessionId, setActiveSessionId] = useState('')
   const [messages, setMessages] = useState<MessageItem[]>([])
@@ -794,6 +993,7 @@ function AgentChatPage(props: DashboardProps) {
   const [prompt, setPrompt] = useState('')
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     setModel(activeAgent?.model ?? models.find((item) => item.is_default)?.model_key ?? models[0]?.model_key ?? '')
@@ -854,6 +1054,30 @@ function AgentChatPage(props: DashboardProps) {
       cancelled = true
     }
   }, [activeSessionId, token])
+
+  async function handleDeleteSession(sessionID: string) {
+    if (!confirm('确定要删除这个会话吗？会话中的所有消息都将被删除。')) return
+    
+    setDeleting(true)
+    setMessage('')
+    try {
+      await deleteSession(token, sessionID)
+      // 重新加载会话列表
+      if (activeAgent) {
+        const items = await fetchSessions(token, activeAgent.id)
+        setSessions(items)
+        // 如果删除的是当前会话，切换到第一个会话
+        if (activeSessionId === sessionID) {
+          setActiveSessionId(items[0]?.id ?? '')
+        }
+      }
+      setMessage('会话已删除')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '删除会话失败')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   async function submit() {
     if (!activeAgent) {
@@ -918,9 +1142,27 @@ function AgentChatPage(props: DashboardProps) {
             {sessions.length > 0 ? (
               <div className="session-strip">
                 {sessions.map((item) => (
-                  <button key={item.id} className={`session-chip ${activeSessionId === item.id ? 'active' : ''}`} onClick={() => setActiveSessionId(item.id)} type="button">
-                    {item.title || '新对话'}
-                  </button>
+                  <div key={item.id} className="session-chip-wrapper">
+                    <button
+                      className={`session-chip ${activeSessionId === item.id ? 'active' : ''}`}
+                      onClick={() => setActiveSessionId(item.id)}
+                      type="button"
+                    >
+                      {item.title || '新对话'}
+                    </button>
+                    <button
+                      className="session-delete-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteSession(item.id)
+                      }}
+                      disabled={deleting}
+                      title="删除会话"
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
             ) : null}

@@ -4,6 +4,7 @@ import {
   createModel,
   createSkill,
   createTool,
+  deleteSession,
   fetchAgents,
   fetchMe,
   fetchModels,
@@ -215,6 +216,11 @@ export function App() {
     await refreshAll()
   }
 
+  async function handleDeleteSession(sessionID: string) {
+    if (!token) throw new Error('请先登录。')
+    await deleteSession(token, sessionID)
+  }
+
   function handleSelectAgent(agentID: string) {
     setActiveAgentId(agentID)
     setCurrentView('agent-chat')
@@ -280,6 +286,7 @@ export function App() {
             onCreateModel={handleCreateModel}
             onCreateSkill={handleCreateSkill}
             onCreateTool={handleCreateTool}
+            onDeleteSession={handleDeleteSession}
             onRefresh={refreshAll}
             skillCatalog={skillCatalog}
             token={token}

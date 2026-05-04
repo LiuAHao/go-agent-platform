@@ -38,8 +38,8 @@ Go Agent Platform 是一个本地优先的 Agent Studio，目标是让普通用�
 - 后端：Go
 - 前端：React + Vite + TypeScript
 - 桌面端：Electron
-- 数据库：Memory / PostgreSQL
-- 脚本：PowerShell
+- 数据库：Memory / PostgreSQL / SQLite (本地)
+- 脚本：PowerShell (Windows) / Bash (Mac/Linux)
 
 ## 项目结构
 
@@ -81,10 +81,16 @@ npm rebuild electron
 
 ### 3. 启动后端
 
-在项目根目录执行：
+**Windows:**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+```
+
+**Mac/Linux:**
+
+```bash
+./scripts/dev.sh
 ```
 
 默认 API 地址：
@@ -158,10 +164,41 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
 
 - [设计方案.md](设计方案.md)：产品定位、架构方向和实施路线
 - [docs/README.md](docs/README.md)：文档目录说明
+- [docs/plans/2026-05-04-local-execution-plan.md](docs/plans/2026-05-04-local-execution-plan.md)：本地执行能力实施计划
 - [docs/plans/2026-04-24-mvp-implementation.md](docs/plans/2026-04-24-mvp-implementation.md)：MVP 实施计划
 - [desktop/README.md](desktop/README.md)：桌面端模块说明
 - [web/console/src/components/README.md](web/console/src/components/README.md)：前端组件说明
 
+## 架构方向
+
+### 数据边界
+
+| 类型 | 云端 | 本地 |
+|------|------|------|
+| Skill | 市场模板、版本、下载地址 | 安装文件、执行环境 |
+| MCP | 配置模板、连接参数说明 | Server 进程、密钥 |
+| 模型 | 模型名称、API URL | **API Key** |
+| Agent | 配置、聊天记录 (同步) | 执行环境 |
+| 聊天 | 双向同步 | 本地优先存储 |
+
+### Skill 分层
+
+- **平台 Skill**：云端市场下载 → 本地安装 → Agent 绑定执行
+- **本地 Skill**：用户本地文件夹 → 直接引用 → 不上传云端
+
+### MCP 本地运行
+
+云端只存 MCP 配置模板，MCP Server 在用户本机启动，Agent 通过本地 Client 调用。
+
+### 敏感数据隔离
+
+API Key、MCP 密钥等敏感数据**永远不上传云端**，只存本地 SQLite。
+
 ## 当前状态
 
-当前项目处于 MVP 前期阶段，已经完成 Web 控制台和 Electron 桌面壳层的基础框架。下一步重点是补齐本地运行时边界、本地 Skill/MCP 安装链路，以及模型和 MCP 的连通性测试。
+当前项目处于 MVP 前期阶段，已经完成 Web 控制台和 Electron 桌面壳层的基础框架。下一步重点是：
+
+1. 本地存储与云端同步基础
+2. Skill 执行能力 (平台下载 + 本地文件夹)
+3. MCP 本地工具调用
+4. 模型真实调用闭环

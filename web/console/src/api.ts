@@ -177,6 +177,45 @@ export type ExecuteTaskPayload = {
   tool_calls?: Array<{ tool_id: string; input: Record<string, unknown> }>
 }
 
+// 存储管理相关类型
+export type StorageStats = {
+  chat_messages: number
+  chat_size_mb: number
+  skills_count: number
+  skills_size_mb: number
+  cache_size_mb: number
+  database_size_mb: number
+  total_size_mb: number
+}
+
+export type RetentionPolicy = {
+  max_age_days: number
+  max_messages: number
+  max_size_mb: number
+  auto_clean: boolean
+}
+
+export type CleanupResult = {
+  deleted_sessions: number
+  deleted_messages: number
+  freed_bytes: number
+}
+
+// 备份相关类型
+export type BackupSettings = {
+  enabled: boolean
+  frequency: 'realtime' | 'daily' | 'manual'
+  encrypt: boolean
+  max_backup_days: number
+  last_backup_at: string | null
+}
+
+export type BackupStatus = {
+  is_syncing: boolean
+  last_sync_at: string | null
+  pending_changes: number
+}
+
 export async function login(email: string, password: string): Promise<LoginResponse> {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
@@ -388,6 +427,162 @@ export async function executeTask(token: string, payload: ExecuteTaskPayload): P
 
   if (!response.ok) {
     throw new Error(await readError(response, '发送消息失败'))
+  }
+
+  return response.json()
+}
+
+// 删除会话
+export async function deleteSession(token: string, sessionID: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/sessions/${sessionID}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '删除会话失败'))
+  }
+}
+
+// 删除 Agent 的所有会话
+export async function deleteAgentSessions(token: string, agentID: string): Promise<CleanupResult> {
+  const response = await fetch(`${API_BASE}/agents/${agentID}/sessions`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '删除 Agent 会话失败'))
+  }
+
+  return response.json()
+}
+
+// 清空所有聊天记录
+export async function clearAllMessages(token: string): Promise<CleanupResult> {
+  const response = await fetch(`${API_BASE}/messages`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '清空聊天记录失败'))
+  }
+
+  return response.json()
+}
+
+// 获取存储统计
+export async function fetchStorageStats(token: string): Promise<StorageStats> {
+  const response = await fetch(`${API_BASE}/storage/stats`, {
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '获取存储统计失败'))
+  }
+
+  return response.json()
+}
+
+// 获取保留策略
+export async function fetchRetentionPolicy(token: string): Promise<RetentionPolicy> {
+  const response = await fetch(`${API_BASE}/storage/retention`, {
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '获取保留策略失败'))
+  }
+
+  return response.json()
+}
+
+// 更新保留策略
+export async function updateRetentionPolicy(token: string, policy: RetentionPolicy): Promise<void> {
+  const response = await fetch(`${API_BASE}/storage/retention`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify(policy),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '更新保留策略失败'))
+  }
+}
+
+// 执行清理
+export async function executeCleanup(token: string): Promise<CleanupResult> {
+  const response = await fetch(`${API_BASE}/storage/clean`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '执行清理失败'))
+  }
+
+  return response.json()
+}
+
+// 获取备份设置
+export async function fetchBackupSettings(token: string): Promise<BackupSettings> {
+  const response = await fetch(`${API_BASE}/backup/settings`, {
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '获取备份设置失败'))
+  }
+
+  return response.json()
+}
+
+// 更新备份设置
+export async function updateBackupSettings(token: string, settings: Partial<BackupSettings>): Promise<void> {
+  const response = await fetch(`${API_BASE}/backup/settings`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify(settings),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '更新备份设置失败'))
+  }
+}
+
+// 手动触发备份
+export async function triggerBackup(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/backup/trigger`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '触发备份失败'))
+  }
+}
+
+// 恢复备份
+export async function restoreBackup(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/backup/restore`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '恢复备份失败'))
+  }
+}
+
+// 获取备份状态
+export async function fetchBackupStatus(token: string): Promise<BackupStatus> {
+  const response = await fetch(`${API_BASE}/backup/status`, {
+    headers: authHeaders(token),
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response, '获取备份状态失败'))
   }
 
   return response.json()
