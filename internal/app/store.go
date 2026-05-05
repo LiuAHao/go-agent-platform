@@ -5,11 +5,12 @@ import (
 
 	"go-agent-platform/internal/config"
 	"go-agent-platform/internal/domain/agent"
-	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/approval"
 	"go-agent-platform/internal/domain/audit"
 	"go-agent-platform/internal/domain/auth"
+	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/session"
+	"go-agent-platform/internal/domain/settings"
 	"go-agent-platform/internal/domain/skill"
 	"go-agent-platform/internal/domain/task"
 	"go-agent-platform/internal/domain/tool"
@@ -61,8 +62,10 @@ type Store interface {
 	FindModelByKey(workspaceID, modelKey string) (model.Model, error)
 	ListModels(workspaceID string) ([]model.Model, error)
 	SaveSession(item session.Session) error
+	DeleteSession(sessionID string) error
 	ListSessionsByAgent(userID, agentID string) ([]session.Session, error)
 	SaveMessage(item session.Message) error
+	DeleteMessage(messageID string) error
 	ListMessages(sessionID string) ([]session.Message, error)
 	SaveSchedule(item task.Schedule) error
 	ListDueSchedules(now time.Time) ([]task.Schedule, error)
@@ -81,4 +84,6 @@ type Store interface {
 	ListApprovals(workspaceID string) ([]approval.Approval, error)
 	SaveAuditEvent(item audit.Event) error
 	ListAuditEvents(workspaceID string) ([]audit.Event, error)
+	GetUserSettings(userID string) (settings.UserSettings, error)
+	SaveUserSettings(settings settings.UserSettings) error
 }

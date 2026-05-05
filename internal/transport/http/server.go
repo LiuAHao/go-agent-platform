@@ -9,6 +9,7 @@ import (
 
 	"go-agent-platform/internal/app"
 	"go-agent-platform/internal/domain/auth"
+	"go-agent-platform/internal/platform/mcp"
 	wstransport "go-agent-platform/internal/transport/ws"
 )
 
@@ -66,6 +67,25 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/approvals/", s.withAuth(s.handleApprovalActions))
 	mux.HandleFunc("/api/v1/schedules", s.withAuth(s.handleSchedules))
 	mux.HandleFunc("/api/v1/audit-events", s.withAuth(s.handleAuditEvents))
+
+	// 存储管理接口
+	mux.HandleFunc("/api/v1/storage/stats", s.withAuth(s.handleStorageStats))
+	mux.HandleFunc("/api/v1/storage/clean", s.withAuth(s.handleStorageClean))
+	mux.HandleFunc("/api/v1/storage/retention", s.withAuth(s.handleStorageRetention))
+
+	// 备份管理接口
+	mux.HandleFunc("/api/v1/backup/settings", s.withAuth(s.handleBackupSettings))
+	mux.HandleFunc("/api/v1/backup/trigger", s.withAuth(s.handleBackupTrigger))
+	mux.HandleFunc("/api/v1/backup/restore", s.withAuth(s.handleBackupRestore))
+	mux.HandleFunc("/api/v1/backup/status", s.withAuth(s.handleBackupStatus))
+
+	// 消息管理接口
+	mux.HandleFunc("/api/v1/messages", s.withAuth(s.handleMessages))
+
+	// MCP 管理接口
+	mux.HandleFunc("/api/v1/mcp/servers", s.withAuth(s.handleMCPServers))
+	mux.HandleFunc("/api/v1/mcp/servers/", s.withAuth(s.handleMCPServerActions))
+	mux.HandleFunc("/api/v1/mcp/tools", s.withAuth(s.handleMCPTools))
 }
 
 func (s *Server) Start() error {
@@ -182,6 +202,13 @@ func (s *Server) handleAgentActions(w http.ResponseWriter, r *http.Request, user
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "published"})
+	case len(parts) == 2 && parts[1] == "sessions" && r.Method == http.MethodDelete:
+		result, err := s.app.DeleteAgentSessions(user.ID, agentID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
 	default:
 		writeError(w, http.StatusNotFound, "route not found")
 	}
@@ -413,17 +440,32 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request, user aut
 	}
 }
 
-func (s *Server) handleSessionActions(w http.ResponseWriter, r *http.Request, _ auth.User) {
+func (s *Server) handleSessionActions(w http.ResponseWriter, r *http.Request, user auth.User) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/sessions/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+
+	// 处理 /api/v1/sessions/{id}/messages
 	if len(parts) == 2 && parts[1] == "messages" && r.Method == http.MethodGet {
 		writeJSON(w, http.StatusOK, map[string]any{"items": s.app.ListMessages(parts[0])})
 		return
 	}
+
+	// 处理 /api/v1/sessions/{id}/tasks
 	if len(parts) == 2 && parts[1] == "tasks" && r.Method == http.MethodGet {
 		writeJSON(w, http.StatusOK, map[string]any{"items": s.app.ListTasksBySession(parts[0])})
 		return
 	}
+
+	// 处理 /api/v1/sessions/{id} DELETE
+	if len(parts) == 1 && parts[0] != "" && r.Method == http.MethodDelete {
+		if err := s.app.DeleteSession(user.ID, parts[0]); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+		return
+	}
+
 	writeError(w, http.StatusNotFound, "route not found")
 }
 
@@ -565,4 +607,230 @@ func setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+}
+
+// 存储管理处理函数
+
+func (s *Server) handleStorageStats(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	stats, err := s.app.GetStorageStats(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleStorageClean(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	result, err := s.app.ExecuteCleanup(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleStorageRetention(w http.ResponseWriter, r *http.Request, user auth.User) {
+	switch r.Method {
+	case http.MethodGet:
+		policy, err := s.app.GetRetentionPolicy(user.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, policy)
+	case http.MethodPut:
+		var policy app.RetentionPolicy
+		if err := json.NewDecoder(r.Body).Decode(&policy); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid payload")
+			return
+		}
+		if err := s.app.UpdateRetentionPolicy(user.ID, policy); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+// 备份管理处理函数
+
+func (s *Server) handleBackupSettings(w http.ResponseWriter, r *http.Request, user auth.User) {
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := s.app.GetBackupSettings(user.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, settings)
+	case http.MethodPut:
+		var settings app.BackupSettings
+		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid payload")
+			return
+		}
+		if err := s.app.UpdateBackupSettings(user.ID, settings); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) handleBackupTrigger(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if err := s.app.TriggerBackup(user.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "backup triggered"})
+}
+
+func (s *Server) handleBackupRestore(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if err := s.app.RestoreBackup(user.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "backup restored"})
+}
+
+func (s *Server) handleBackupStatus(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	status, err := s.app.GetBackupStatus(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, status)
+}
+
+// 消息管理处理函数
+
+func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodDelete {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	result, err := s.app.ClearAllMessages(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// MCP 管理处理函数
+
+func (s *Server) handleMCPServers(w http.ResponseWriter, r *http.Request, user auth.User) {
+	switch r.Method {
+	case http.MethodGet:
+		// 列出所有 MCP 服务器
+		servers := s.app.MCPManager.ListServers()
+		writeJSON(w, http.StatusOK, map[string]any{"items": servers})
+	case http.MethodPost:
+		// 启动新的 MCP 服务器
+		var req struct {
+			ID      string            `json:"id"`
+			Name    string            `json:"name"`
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid payload")
+			return
+		}
+
+		config := &mcp.ServerConfig{
+			ID:      req.ID,
+			Name:    req.Name,
+			Command: req.Command,
+			Args:    req.Args,
+			Env:     req.Env,
+		}
+
+		if err := s.app.StartMCPServer(config); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, map[string]string{"status": "started", "id": req.ID})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) handleMCPServerActions(w http.ResponseWriter, r *http.Request, user auth.User) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/mcp/servers/")
+	serverID := strings.Trim(path, "/")
+
+	if serverID == "" {
+		writeError(w, http.StatusBadRequest, "server id is required")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		// 获取服务器工具列表
+		tools, err := s.app.MCPManager.GetServerTools(serverID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": tools})
+	case http.MethodDelete:
+		// 停止服务器
+		if err := s.app.MCPManager.StopServer(serverID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) handleMCPTools(w http.ResponseWriter, r *http.Request, user auth.User) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// 获取所有 MCP 工具
+	allTools := s.app.MCPManager.GetAllTools()
+	writeJSON(w, http.StatusOK, map[string]any{"tools": allTools})
 }

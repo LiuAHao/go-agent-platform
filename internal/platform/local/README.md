@@ -36,7 +36,7 @@ internal/platform/local/
 │   └── {agent-id}/
 │       └── runtime.json
 ├── logs/
-│   └── executions/
+│   └── executions/           # 执行日志
 └── cache/                    # 临时缓存
 ```
 

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,15 +20,18 @@ import (
 	"go-agent-platform/internal/domain/workspace"
 	"go-agent-platform/internal/platform/events"
 	"go-agent-platform/internal/platform/llm"
+	"go-agent-platform/internal/platform/mcp"
 	"go-agent-platform/internal/platform/memory"
+	mysqlstore "go-agent-platform/internal/platform/mysql"
 	"go-agent-platform/internal/platform/postgres"
 )
 
 type Application struct {
-	Config   config.Config
-	Store    Store
-	Events   *events.Hub
-	Provider llm.Provider
+	Config     config.Config
+	Store      Store
+	Events     *events.Hub
+	Provider   llm.Provider
+	MCPManager *mcp.Manager
 }
 
 func New(cfg config.Config) (*Application, error) {
@@ -39,12 +43,26 @@ func New(cfg config.Config) (*Application, error) {
 		_ = store.Close()
 		return nil, err
 	}
+
+	// 创建 LLM Provider
+	provider := createLLMProvider(cfg)
+
 	return &Application{
-		Config:   cfg,
-		Store:    store,
-		Events:   events.NewHub(),
-		Provider: llm.MockProvider{},
+		Config:     cfg,
+		Store:      store,
+		Events:     events.NewHub(),
+		Provider:   provider,
+		MCPManager: mcp.NewManager(),
 	}, nil
+}
+
+func createLLMProvider(cfg config.Config) llm.Provider {
+	// 如果配置了 API Key，使用真实的 LLM Provider
+	if cfg.LLMAPIKey != "" {
+		return llm.NewOpenAIProvider(cfg.LLMAPIKey, cfg.LLMBaseURL, cfg.LLMModel)
+	}
+	// 否则使用 Mock Provider
+	return llm.MockProvider{}
 }
 
 func newStore(cfg config.Config) (Store, error) {
@@ -53,12 +71,17 @@ func newStore(cfg config.Config) (Store, error) {
 		return memory.NewStore(), nil
 	case "postgres":
 		return postgres.New(cfg)
+	case "mysql":
+		return mysqlstore.New(cfg)
 	default:
 		return nil, fmt.Errorf("unsupported storage driver: %s", cfg.StorageDriver)
 	}
 }
 
 func (a *Application) Close() error {
+	if a.MCPManager != nil {
+		a.MCPManager.Close()
+	}
 	if a.Store == nil {
 		return nil
 	}
@@ -516,7 +539,8 @@ func (a *Application) runTask(taskID string) {
 		a.publishEvent("task.stream.delta", job.ID, job.TraceID, map[string]any{"task_id": job.ID, "delta": outputJSON})
 	}
 
-	result := a.Provider.Complete(job.Prompt, toolOutputs)
+	// 使用 LLM 生成最终结果
+	result := a.completeWithLLM(job)
 	job.Status = task.StatusCompleted
 	job.Result = result
 	job.UpdatedAt = time.Now().UTC()
@@ -530,6 +554,62 @@ func (a *Application) runTask(taskID string) {
 		CreatedAt: time.Now().UTC(),
 	})
 	a.publishEvent("task.completed", job.ID, job.TraceID, map[string]any{"task_id": job.ID, "result": result})
+}
+
+// completeWithLLM 使用 LLM 生成最终结果
+func (a *Application) completeWithLLM(job task.Task) string {
+	// 检查是否是 OpenAI Provider
+	if openaiProvider, ok := a.Provider.(*llm.OpenAIProvider); ok {
+		// 构建消息
+		messages := []llm.OpenAIMessage{
+			{
+				Role:    "system",
+				Content: "你是一个智能助手。根据用户的请求和工具执行结果，生成最终的回答。请用中文回复。",
+			},
+			{
+				Role:    "user",
+				Content: job.Prompt,
+			},
+		}
+
+		// 添加工具执行结果
+		if len(job.ToolCalls) > 0 {
+			toolContext := "工具执行结果:\n"
+			for i, call := range job.ToolCalls {
+				tool, err := a.Store.FindToolByID(call.ToolID)
+				if err == nil {
+					toolContext += fmt.Sprintf("%d. %s: 已执行\n", i+1, tool.Name)
+				}
+			}
+			messages = append(messages, llm.OpenAIMessage{
+				Role:    "user",
+				Content: toolContext,
+			})
+		}
+
+		// 调用 LLM
+		resp, err := openaiProvider.Chat(messages, nil)
+		if err != nil {
+			return fmt.Sprintf("任务完成，但生成回复时出错: %v", err)
+		}
+
+		if len(resp.Choices) > 0 {
+			return resp.Choices[0].Message.Content
+		}
+
+		return "任务完成"
+	}
+
+	// 降级到 Mock Provider
+	toolOutputs := make([]string, 0)
+	for _, call := range job.ToolCalls {
+		tool, err := a.Store.FindToolByID(call.ToolID)
+		if err == nil {
+			output, _ := a.executeTool(tool, call.Input)
+			toolOutputs = append(toolOutputs, output)
+		}
+	}
+	return a.Provider.Complete(job.Prompt, toolOutputs)
 }
 
 func (a *Application) Approve(userID, approvalID string, approved bool) (approval.Approval, error) {
@@ -699,6 +779,32 @@ func (a *Application) ListAuditEvents(workspaceID string) []audit.Event {
 }
 
 func (a *Application) executeTool(t tool.Tool, input map[string]any) (string, string) {
+	// 检查是否是 MCP 工具
+	if t.Config != nil {
+		if mcpID, ok := t.Config["mcp_id"].(string); ok {
+			if toolName, ok := t.Config["mcp_tool"].(string); ok {
+				// 调用 MCP 工具
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+
+				result, err := a.MCPManager.CallTool(ctx, mcpID, toolName, input)
+				if err != nil {
+					errMsg := fmt.Sprintf("MCP tool error: %v", err)
+					return errMsg, errMsg
+				}
+
+				// 提取结果文本
+				var resultTexts []string
+				for _, content := range result.Content {
+					resultTexts = append(resultTexts, content.Text)
+				}
+				resultStr := strings.Join(resultTexts, "\n")
+				return resultStr, resultStr
+			}
+		}
+	}
+
+	// 默认行为：模拟执行
 	payload, _ := json.Marshal(input)
 	result := fmt.Sprintf("executed tool %s with input %s", t.Name, string(payload))
 	return result, result

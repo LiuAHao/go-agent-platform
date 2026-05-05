@@ -13,6 +13,7 @@ import (
 	"go-agent-platform/internal/domain/auth"
 	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/session"
+	"go-agent-platform/internal/domain/settings"
 	"go-agent-platform/internal/domain/shared"
 	"go-agent-platform/internal/domain/skill"
 	"go-agent-platform/internal/domain/task"
@@ -756,4 +757,59 @@ func (s *Store) ListAuditEvents(workspaceID string) ([]audit.Event, error) {
 		}
 	}
 	return items, nil
+}
+
+// 删除会话
+func (s *Store) DeleteSession(sessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.sessions[sessionID]; !ok {
+		return errors.New("session not found")
+	}
+
+	delete(s.sessions, sessionID)
+	delete(s.messages, sessionID)
+	return nil
+}
+
+// 删除消息
+func (s *Store) DeleteMessage(messageID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for sessionID, messages := range s.messages {
+		for i, msg := range messages {
+			if msg.ID == messageID {
+				s.messages[sessionID] = append(messages[:i], messages[i+1:]...)
+				return nil
+			}
+		}
+	}
+
+	return errors.New("message not found")
+}
+
+// 用户设置存储
+var userSettingsStore = make(map[string]settings.UserSettings)
+
+func (s *Store) GetUserSettings(userID string) (settings.UserSettings, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	userSettings, ok := userSettingsStore[userID]
+	if !ok {
+		// 返回默认设置
+		return settings.DefaultSettings(userID), nil
+	}
+
+	return userSettings, nil
+}
+
+func (s *Store) SaveUserSettings(userSettings settings.UserSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	userSettingsStore[userSettings.UserID] = userSettings
+	return nil
 }

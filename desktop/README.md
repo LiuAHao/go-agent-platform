@@ -1,93 +1,119 @@
-# 桌面端模块说明
+# Desktop - Electron 桌面客户端
 
-`desktop/` 是 Go Agent Platform 的桌面客户端壳层，当前基于 Electron 实现。
+Go Agent Platform 的桌面客户端壳层，基于 Electron 构建。
 
-## 当前职责
+## 功能
 
-当前桌面端模块只承担最小壳层职责：
+- **Go Runtime 进程管理**：自动启动/停止 Go 后端
+- **文件选择桥接**：选择本地文件夹作为 Skill
+- **系统通知**：Agent 执行完成通知
+- **托盘常驻**：后台运行、快速唤起
+- **自动更新**：后续支持
 
-- 启动桌面窗口
-- 开发环境加载本地前端调试地址
-- 生产环境加载前端构建产物
-- 通过 `preload` 预留后续本地系统桥接入口
+## 目录结构
 
-## 当前不负责的事情
+```
+desktop/
+├── main.js           # Electron 主进程
+├── preload.js        # 预加载脚本
+├── package.json      # 依赖配置
+├── start.sh          # 一键启动脚本
+└── README.md         # 本文件
+```
 
-目前这个模块还**不直接承担**以下逻辑：
+## 快速开始
 
-- 后端 API
-- 本地运行时执行
-- 系统文件桥接
-- MCP 本地进程拉起
-- 自动更新
-- 桌面通知
+### 安装依赖
 
-这些能力会在后续迭代中逐步接入。
-
-## 目录说明
-
-- `main.js`
-  - Electron 主进程入口
-- `preload.js`
-  - 前端与桌面能力之间的安全桥接层
-- `package.json`
-  - 桌面端依赖与启动脚本
-
-## 本地开发
-
-先安装桌面端依赖：
-
-```powershell
-cd .\desktop
+```bash
 npm install
 ```
 
-然后有两种启动方式：
+### 启动开发模式
 
-### 方式 1：手动启动
-
-先启动前端：
-
-```powershell
-cd .\web\console
+```bash
 npm run dev
 ```
 
-再启动桌面壳：
+### 一键启动 (包含后端和前端)
 
-```powershell
-cd .\desktop
+```bash
+./start.sh
+```
+
+## 主进程 API
+
+### 窗口管理
+
+- `createMainWindow()`：创建主窗口
+- `isDevMode()`：判断是否开发模式
+
+### 进程管理
+
+- `startGoBackend()`：启动 Go 后端
+- `stopGoBackend()`：停止 Go 后端
+
+### IPC 通道
+
+- `select-folder`：选择文件夹
+- `show-notification`：显示通知
+- `get-app-info`：获取应用信息
+
+## 预加载 API
+
+通过 `window.desktopBridge` 暴露给渲染进程：
+
+```javascript
+// 版本信息
+desktopBridge.versions.chrome
+desktopBridge.versions.electron
+desktopBridge.versions.node
+
+// 打开外部链接
+desktopBridge.openExternal(url)
+
+// 选择文件夹
+const folder = await desktopBridge.selectFolder()
+
+// 显示通知
+await desktopBridge.showNotification(title, body)
+
+// 获取应用信息
+const info = await desktopBridge.getAppInfo()
+```
+
+## 构建
+
+### 开发模式
+
+```bash
 npm run dev
 ```
 
-### 方式 2：使用根目录脚本
+### 生产模式
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\dev-desktop.ps1
-```
-
-## 生产模式
-
-先构建前端：
-
-```powershell
-cd .\web\console
+```bash
 npm run build
 ```
 
-再启动桌面壳：
+## 配置
 
-```powershell
-cd .\desktop
-npm run start
-```
+### 环境变量
 
-## 后续演进方向
+- `ELECTRON_RENDERER_URL`：开发服务器地址 (默认 http://localhost:5173)
 
-后续建议按以下顺序扩展：
+### Go 后端
 
-1. 文件选择和本地目录桥接
-2. 本地运行时 API 桥接
-3. 本地 MCP / Skill 安装目录管理
-4. 自动更新
-5. 系统托盘与通知
+- 开发模式：使用项目根目录的 `go-agent-platform` 二进制
+- 生产模式：使用 `resources/go-agent-platform` 二进制
+
+## 依赖
+
+- Electron
+- Node.js
+
+## 平台支持
+
+- macOS
+- Windows
+- Linux

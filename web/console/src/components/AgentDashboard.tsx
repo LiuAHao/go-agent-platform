@@ -29,6 +29,7 @@ import {
   type ToolItem,
   type UserInfo,
 } from '../api'
+import { isElectron, selectFolder, showNotification, getAppInfo, getVersions } from '../desktop'
 import type { ViewKey } from '../App'
 import { AppIcon, type AppIconKey } from './AppIcon'
 
@@ -775,10 +776,35 @@ function SettingsPage({ user, token }: { user: UserInfo | null; token: string })
   const [message, setMessage] = useState('')
   const [cleaning, setCleaning] = useState(false)
   const [backing, setBacking] = useState(false)
+  const [desktopInfo, setDesktopInfo] = useState<any>(null)
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
+    loadDesktopInfo()
   }, [token])
+
+  async function loadDesktopInfo() {
+    try {
+      const info = await getAppInfo()
+      setDesktopInfo(info)
+    } catch (error) {
+      console.error('Failed to load desktop info:', error)
+    }
+  }
+
+  async function handleSelectFolder() {
+    const folder = await selectFolder()
+    if (folder) {
+      setSelectedFolder(folder)
+      setMessage(`已选择文件夹: ${folder}`)
+    }
+  }
+
+  async function handleTestNotification() {
+    await showNotification('测试通知', '这是一条来自 Go Agent Platform 的测试通知')
+    setMessage('通知已发送')
+  }
 
   async function loadData() {
     setLoading(true)
@@ -856,6 +882,8 @@ function SettingsPage({ user, token }: { user: UserInfo | null; token: string })
     manual: '手动',
   }
 
+  const versions = getVersions()
+
   return (
     <div className="page-shell">
       <PageHero icon="settings" title="系统设置" subtitle="管理账户信息、本地存储和云端备份。" />
@@ -876,6 +904,55 @@ function SettingsPage({ user, token }: { user: UserInfo | null; token: string })
             </div>
           </div>
         </Section>
+
+        {isElectron() ? (
+          <Section title="桌面端信息" hint="当前运行在 Electron 桌面端环境中。">
+            <div className="form-grid form-grid-three">
+              <div className="field readonly">
+                <span>运行环境</span>
+                <input readOnly type="text" value="Electron 桌面端" />
+              </div>
+              <div className="field readonly">
+                <span>后端状态</span>
+                <input readOnly type="text" value={desktopInfo?.goBackendRunning ? '运行中' : '未运行'} />
+              </div>
+              <div className="field readonly">
+                <span>平台</span>
+                <input readOnly type="text" value={desktopInfo?.platform ?? '未知'} />
+              </div>
+            </div>
+            <div className="form-grid form-grid-three">
+              <div className="field readonly">
+                <span>Chrome 版本</span>
+                <input readOnly type="text" value={versions.chrome} />
+              </div>
+              <div className="field readonly">
+                <span>Electron 版本</span>
+                <input readOnly type="text" value={versions.electron} />
+              </div>
+              <div className="field readonly">
+                <span>Node 版本</span>
+                <input readOnly type="text" value={versions.node} />
+              </div>
+            </div>
+            <div className="panel-actions">
+              <button className="secondary-button" onClick={handleSelectFolder} type="button">
+                选择文件夹
+              </button>
+              <button className="secondary-button" onClick={handleTestNotification} type="button">
+                测试通知
+              </button>
+            </div>
+            {selectedFolder ? (
+              <div className="backup-info">
+                <div className="backup-status">
+                  <span className="stat-label">已选择的文件夹</span>
+                  <span className="stat-value">{selectedFolder}</span>
+                </div>
+              </div>
+            ) : null}
+          </Section>
+        ) : null}
 
         <Section title="本地存储" hint="查看本地数据占用情况，清理不需要的数据。">
           {loading ? (

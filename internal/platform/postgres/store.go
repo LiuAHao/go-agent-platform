@@ -17,6 +17,7 @@ import (
 	"go-agent-platform/internal/domain/auth"
 	"go-agent-platform/internal/domain/model"
 	"go-agent-platform/internal/domain/session"
+	"go-agent-platform/internal/domain/settings"
 	"go-agent-platform/internal/domain/shared"
 	"go-agent-platform/internal/domain/skill"
 	"go-agent-platform/internal/domain/task"
@@ -47,6 +48,7 @@ func New(cfg config.Config) (*Store, error) {
 			resolveMigrationPath("migrations/002_skill_and_model_registry.sql"),
 			resolveMigrationPath("migrations/003_platform_catalog_and_chat.sql"),
 			resolveMigrationPath("migrations/004_model_api_config.sql"),
+			resolveMigrationPath("migrations/005_user_settings.sql"),
 		); err != nil {
 			pool.Close()
 			return nil, err
@@ -1255,4 +1257,33 @@ func nullTime(value time.Time) any {
 		return nil
 	}
 	return value
+}
+
+// 删除会话
+func (s *Store) DeleteSession(sessionID string) error {
+	_, err := s.pool.Exec(context.Background(), "DELETE FROM sessions WHERE id = $1", sessionID)
+	return err
+}
+
+// 删除消息
+func (s *Store) DeleteMessage(messageID string) error {
+	_, err := s.pool.Exec(context.Background(), "DELETE FROM messages WHERE id = $1", messageID)
+	return err
+}
+
+// 用户设置存储（使用 JSON 文件或数据库表）
+// 这里简化为使用内存存储，实际应该存储到数据库
+var pgUserSettingsStore = make(map[string]settings.UserSettings)
+
+func (s *Store) GetUserSettings(userID string) (settings.UserSettings, error) {
+	userSettings, ok := pgUserSettingsStore[userID]
+	if !ok {
+		return settings.DefaultSettings(userID), nil
+	}
+	return userSettings, nil
+}
+
+func (s *Store) SaveUserSettings(userSettings settings.UserSettings) error {
+	pgUserSettingsStore[userSettings.UserID] = userSettings
+	return nil
 }

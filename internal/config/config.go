@@ -17,6 +17,20 @@ type Config struct {
 	StorageDriver      string
 	PostgresDSN        string
 	PostgresAutoMigrate bool
+
+	// MySQL 配置
+	MySQLHost     string
+	MySQLPort     int
+	MySQLDatabase string
+	MySQLUser     string
+	MySQLPassword string
+	MySQLDSN      string
+
+	// LLM 配置
+	LLMProvider  string
+	LLMAPIKey    string
+	LLMBaseURL   string
+	LLMModel     string
 }
 
 func Load() Config {
@@ -30,6 +44,20 @@ func Load() Config {
 		StorageDriver:       env("STORAGE_DRIVER", "memory"),
 		PostgresDSN:         env("POSTGRES_DSN", "postgres://agent:agent@127.0.0.1:5432/agent_platform?sslmode=disable"),
 		PostgresAutoMigrate: envBool("POSTGRES_AUTO_MIGRATE", true),
+
+		// MySQL 配置
+		MySQLHost:     env("MYSQL_HOST", "localhost"),
+		MySQLPort:     envInt("MYSQL_PORT", 3306),
+		MySQLDatabase: env("MYSQL_DATABASE", "agent_platform_cloud"),
+		MySQLUser:     env("MYSQL_USER", "agent"),
+		MySQLPassword: env("MYSQL_PASSWORD", "agent123"),
+		MySQLDSN:      env("MYSQL_DSN", ""),
+
+		// LLM 配置
+		LLMProvider:  env("LLM_PROVIDER", "openai"),
+		LLMAPIKey:    env("LLM_API_KEY", ""),
+		LLMBaseURL:   env("LLM_BASE_URL", "https://api.deepseek.com"),
+		LLMModel:     env("LLM_MODEL", "deepseek-v4-flash"),
 	}
 }
 
