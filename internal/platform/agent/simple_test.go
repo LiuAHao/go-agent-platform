@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,9 +13,12 @@ import (
 )
 
 func TestSimpleToolCall(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 
@@ -60,9 +64,12 @@ func TestSimpleToolCall(t *testing.T) {
 }
 
 func TestTwoStepTask(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 
@@ -103,9 +110,12 @@ func TestTwoStepTask(t *testing.T) {
 }
 
 func TestToolSelection(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 
@@ -142,9 +152,12 @@ func TestToolSelection(t *testing.T) {
 }
 
 func TestReActLoop(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 
@@ -195,9 +208,12 @@ func TestReActLoop(t *testing.T) {
 }
 
 func TestPlannerToolFiltering(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 	planner := agent.NewLLMPlanner(provider)

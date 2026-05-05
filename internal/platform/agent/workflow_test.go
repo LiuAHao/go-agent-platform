@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,9 +13,12 @@ import (
 )
 
 func TestWorkflowLogging(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 
@@ -185,4 +189,11 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }

@@ -63,3 +63,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## 5. Security: Never Hardcode Secrets
+
+**API keys, passwords, and tokens must NEVER be hardcoded in source code.**
+
+- Always read secrets from environment variables (e.g., `os.Getenv("LLM_API_KEY")`)
+- Use `.env` files for local development (already in `.gitignore`)
+- In tests, skip gracefully when env vars are missing: `if apiKey == "" { t.Skip(...) }`
+- If you see hardcoded secrets in code, flag them immediately
+
+Example pattern for tests:
+```go
+apiKey := os.Getenv("LLM_API_KEY")
+if apiKey == "" {
+    t.Skip("LLM_API_KEY not set, skipping test")
+}
+```

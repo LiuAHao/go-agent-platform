@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"go-agent-platform/internal/platform/agent"
@@ -10,10 +11,12 @@ import (
 )
 
 func TestAgentFramework(t *testing.T) {
-	// 从环境变量获取 API Key
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 
@@ -77,9 +80,12 @@ func TestAgentFramework(t *testing.T) {
 }
 
 func TestPlanner(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 	planner := agent.NewLLMPlanner(provider)
@@ -104,9 +110,12 @@ func TestPlanner(t *testing.T) {
 }
 
 func TestReActExecutor(t *testing.T) {
-	apiKey := "sk-b5ec6cbd1b6742e48c401bbd1372bc7a"
-	baseURL := "https://api.deepseek.com"
-	model := "deepseek-v4-flash"
+	apiKey := os.Getenv("LLM_API_KEY")
+	if apiKey == "" {
+		t.Skip("LLM_API_KEY not set, skipping test")
+	}
+	baseURL := envOrDefault("LLM_BASE_URL", "https://api.deepseek.com")
+	model := envOrDefault("LLM_MODEL", "deepseek-v4-flash")
 
 	provider := llm.NewOpenAIProvider(apiKey, baseURL, model)
 	executor := agent.NewReActExecutor(provider)
@@ -138,4 +147,11 @@ func TestReActExecutor(t *testing.T) {
 	for i, step := range result.Steps {
 		t.Logf("  Step %d: Thought=%s, Action=%s", i+1, step.Thought, step.Action)
 	}
+}
+
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }
